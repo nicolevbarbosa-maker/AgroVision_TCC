@@ -1,0 +1,17 @@
+Modelo Entidade-Relacionamento (MER) - AgroVision
+
+Entidade: historico (Armazena os registros de pragas detectadas pela IA).
+
+Atributos:
+
+id: Identificador único (Chave Primária).
+
+data_hora: Momento exato da detecção.
+
+setor: Identificação da área monitorada.
+
+praga_nome: Nome da praga identificada.
+
+confianca: Nível de certeza da IA (0 a 1).
+
+status: Estado da detecção (ex: pendente, verificado).

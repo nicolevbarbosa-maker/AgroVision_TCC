@@ -1,0 +1,8 @@
+{
+  "liveServer.settings.ignoreFiles": [
+    "**/mosaico_fazenda.jpg",
+    "**/*.jpg",
+    "**/*.png"
+  ],
+  "liveServer.settings.port": 5501
+}
