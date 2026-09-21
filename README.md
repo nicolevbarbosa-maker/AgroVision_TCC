@@ -43,10 +43,10 @@ de detecção por visão computacional.
 
 ## 👥 Equipe
 
+- Ryan — Líder - Back-End
 - Nicole — Front-End
 - Rafaella — Front-End / Design
 - Lukas Justyn — Inteligência Artificial
-- Ryan — Banco de Dados
 
 ## 📂 Estrutura do projeto
 
