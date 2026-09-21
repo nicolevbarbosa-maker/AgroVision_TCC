@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgroVision — Dashboard Agrícola</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // Guarda de acesso: exige login e permissão concedida antes de exibir o painel.
+    (function () {
+      const logged = localStorage.getItem('agrovision_logged_in') === 'true' || sessionStorage.getItem('agrovision_logged_in') === 'true';
+      const allowed = localStorage.getItem('agrovision_permission') === 'true' || sessionStorage.getItem('agrovision_permission') === 'true';
+      if (!logged) {
+        window.location.replace('login.html');
+      } else if (!allowed) {
+        window.location.replace('permissao.html');
+      }
+    })();
+  </script>
+</head>
+<body>
+
+  <!-- ══════════════════ TOPBAR ══════════════════ -->
+  <header class="topbar">
+    <div class="logo">
+      <img src="logo.png" alt="Logo AgroVision" class="logo-img">
+      <span class="logo-text">AgroVision</span>
+    </div>
+
+    <div class="topbar-right">
+      <div class="status-connected">
+        <span class="dot-green"></span>
+        <span>Conectado</span>
+      </div>
+
+      <div class="top-stat">
+        <div class="signal-icon">
+          <span class="bar b1"></span>
+          <span class="bar b2"></span>
+          <span class="bar b3"></span>
+          <span class="bar b4"></span>
+        </div>
+        <div class="top-stat-info">
+          <span class="top-stat-label">Sinal</span>
+          <span class="top-stat-value">98%</span>
+        </div>
+      </div>
+
+      <div class="top-stat">
+        <svg viewBox="0 0 22 12" width="22" height="12" class="battery-icon">
+          <rect x="0" y="0" width="20" height="12" rx="2" fill="none" stroke="#4ade80" stroke-width="1.2"/>
+          <rect x="20.5" y="3.5" width="2" height="5" rx="1" fill="#4ade80"/>
+          <rect x="1.5" y="1.5" width="15" height="9" rx="1.5" fill="#4ade80" opacity="0.9"/>
+        </svg>
+        <div class="top-stat-info">
+          <span class="top-stat-label">Bateria</span>
+          <span class="top-stat-value">85%</span>
+        </div>
+      </div>
+
+      <div class="top-stat mode-btn" id="mode-btn">
+        <svg viewBox="0 0 20 20" width="18" height="18" fill="none">
+          <path d="M10 2a8 8 0 100 16A8 8 0 0010 2z" stroke="#4ade80" stroke-width="1.5"/>
+          <path d="M10 6v4l3 3" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <div class="top-stat-info">
+          <span class="top-stat-label">Modo</span>
+          <span class="top-stat-value" id="mode-value">Automático</span>
+        </div>
+        <svg viewBox="0 0 10 6" width="10" height="6" class="caret">
+          <path d="M1 1l4 4 4-4" stroke="#94a3b8" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══════════════════ MAIN ══════════════════ -->
+  <div class="main-grid">
+
+    <!-- ─── LEFT PANEL ─── -->
+    <aside class="left-panel">
+
+      <div class="panel-card">
+        <div class="panel-card-title">CONTROLES DA MISSÃO</div>
+        <button class="btn-mission btn-start" id="btn-start-mission">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="#1a2a1a">
+            <polygon points="3,2 13,8 3,14"/>
+          </svg>
+          Iniciar Mapeamento
+        </button>
+        <button class="btn-mission btn-stop" id="btn-stop-mission" disabled>
+          <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor">
+            <rect x="2" y="2" width="12" height="12" rx="1"/>
+          </svg>
+          Parar Mapeamento
+        </button>
+        <button class="btn-mission btn-reset" id="btn-reset-mission">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M13 8A5 5 0 113 8" stroke-linecap="round"/>
+            <polyline points="13,4 13,8 9,8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Resetar Mapeamento
+        </button>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-card-title-row">
+          <span class="panel-card-title">VELOCIDADE DO DRONE</span>
+          <span class="speed-val" id="speed-display">50%</span>
+        </div>
+        <div class="slider-wrap">
+          <input type="range" min="0" max="100" value="50" id="speed-slider" class="speed-slider">
+        </div>
+        <div class="slider-labels">
+          <span>Lento</span>
+          <span>Rápido</span>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-card-title">STATUS DE VOO</div>
+        <div class="flight-row">
+          <div class="flight-icon">
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="#4ade80" stroke-width="1.5">
+              <circle cx="10" cy="10" r="7"/>
+              <polyline points="10,6 10,10 13,12" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <span class="flight-key">Tempo de voo</span>
+          <span class="flight-val" id="flight-time">00:00</span>
+        </div>
+        <div class="flight-row">
+          <div class="flight-icon">
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="#4ade80" stroke-width="1.5">
+              <circle cx="10" cy="8" r="4"/>
+              <path d="M10 12v6M7 15h6" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <span class="flight-key">Distância percorrida</span>
+          <span class="flight-val green" id="distance-value">0,0 km</span>
+        </div>
+        <div class="flight-row">
+          <div class="flight-icon">
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="#4ade80" stroke-width="1.5">
+              <path d="M4 16L10 4l6 12H4z" stroke-linejoin="round"/>
+              <line x1="10" y1="10" x2="10" y2="12"/>
+            </svg>
+          </div>
+          <span class="flight-key">Altitude</span>
+          <span class="flight-val green" id="altitude-value">0,0 m</span>
+        </div>
+        <div class="flight-row">
+          <div class="flight-icon">
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="#4ade80" stroke-width="1.5">
+              <circle cx="10" cy="10" r="7"/>
+              <circle cx="10" cy="10" r="2.5" fill="#4ade80"/>
+            </svg>
+          </div>
+          <span class="flight-key">Status</span>
+          <span class="flight-val gray" id="flight-status-value">Parado</span>
+        </div>
+        <div class="update-notice" id="update-notice">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="#64748b" stroke-width="1.4">
+            <path d="M13 8A5 5 0 113 8" stroke-linecap="round"/>
+            <polyline points="13,4 13,8 9,8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span id="update-notice-text">Aguardando início do mapeamento</span>
+        </div>
+      </div>
+
+      <div class="panel-card scanned-card">
+        <div class="scanned-row">
+          <svg viewBox="0 0 20 20" width="22" height="22" fill="none">
+            <rect x="2" y="10" width="7" height="8" rx="1" fill="#4ade80" opacity="0.85"/>
+            <path d="M11 6l4 4-4 4" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M2 4h16" stroke="#4ade80" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
+          </svg>
+          <div class="scanned-info">
+            <span class="scanned-label">Área Escaneada</span>
+            <span class="scanned-value" id="scanned-value">0%</span>
+          </div>
+        </div>
+        <div class="scanned-bar-bg">
+          <div class="scanned-bar-fill" id="scanned-bar-fill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-card-title">FERRAMENTAS</div>
+        <button class="btn-mission btn-tool" id="btn-history">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="8" cy="8" r="6.5"/>
+            <path d="M8 4.5V8l2.6 1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Histórico de Pragas
+        </button>
+        <button class="btn-mission btn-tool" id="btn-mosaic">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="0.8"/>
+            <rect x="9" y="1.5" width="5.5" height="5.5" rx="0.8"/>
+            <rect x="1.5" y="9" width="5.5" height="5.5" rx="0.8"/>
+            <rect x="9" y="9" width="5.5" height="5.5" rx="0.8"/>
+          </svg>
+          Gerar Mosaico
+        </button>
+      </div>
+
+    </aside>
+
+    <!-- ─── CENTER PANEL ─── -->
+    <main class="center-panel">
+      <div class="camera-card">
+        <div class="camera-card-header">
+          <div class="camera-card-header-left">
+            <h2 class="camera-title">VISÃO GERAL DA FAZENDA</h2>
+            <p class="camera-subtitle">Fazenda Vale do Carvalho – Seção 7B</p>
+          </div>
+          <div class="live-badge offline" id="live-badge">
+            <span class="live-dot" id="live-dot"></span>
+            <span id="live-badge-text">OFFLINE</span>
+          </div>
+        </div>
+
+        <div class="camera-viewport" id="camera-viewport">
+          <!-- Webcam feed — NÃO ALTERAR IDs/lógica -->
+          <video id="camera-feed" autoplay playsinline muted></video>
+          <!-- Fallback placeholder -->
+          <div class="video-placeholder" id="video-bg"></div>
+
+          <!-- Overlay info -->
+          <div class="cam-overlay-badge">
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="1.5">
+              <circle cx="10" cy="10" r="7"/>
+              <circle cx="10" cy="10" r="2.5" fill="rgba(255,255,255,0.8)"/>
+              <line x1="10" y1="3" x2="10" y2="1.5"/>
+              <line x1="10" y1="17" x2="10" y2="18.5"/>
+              <line x1="3" y1="10" x2="1.5" y2="10"/>
+              <line x1="17" y1="10" x2="18.5" y2="10"/>
+            </svg>
+            <div>
+              <div class="cam-badge-title">Câmera do drone</div>
+              <div class="cam-badge-sub">Transmissão em tempo real</div>
+            </div>
+          </div>
+
+          <div class="cam-expand-btn" id="cam-expand-btn">
+            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="1.5">
+              <path d="M3 8V3h5M12 3h5v5M17 12v5h-5M8 17H3v-5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom stats row -->
+      <div class="bottom-stats">
+        <div class="stat-card">
+          <div class="stat-icon orange-icon">
+            <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M10 2v2M10 16v2M4 10H2M18 10h-2M5.6 5.6L4.2 4.2M15.8 15.8l-1.4-1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4" stroke-linecap="round"/>
+              <circle cx="10" cy="10" r="4"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-name">Temperatura</span>
+            <div class="stat-val-row">
+              <span class="stat-number" id="stat-temp">--</span>
+              <span class="stat-badge gray-badge" id="stat-temp-badge">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon blue-icon">
+            <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M10 3C10 3 4 9 4 13a6 6 0 0012 0c0-4-6-10-6-10z" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-name">Umidade</span>
+            <div class="stat-val-row">
+              <span class="stat-number" id="stat-humidity">--</span>
+              <span class="stat-badge gray-badge" id="stat-humidity-badge">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon teal-icon">
+            <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M2 10c2-5 14-5 16 0" stroke-linecap="round"/>
+              <path d="M4 14c1.5-2 10.5-2 12 0" stroke-linecap="round" opacity="0.6"/>
+              <path d="M1 7c3-3 15-3 18 0" stroke-linecap="round" opacity="0.4"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-name">Vento</span>
+            <div class="stat-val-row">
+              <span class="stat-number" id="stat-wind">--</span>
+              <span class="stat-badge gray-badge" id="stat-wind-badge">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon green-icon">
+            <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="10" cy="10" r="7"/>
+              <circle cx="10" cy="10" r="2.5" fill="currentColor"/>
+              <line x1="10" y1="3" x2="10" y2="1.5" stroke-linecap="round"/>
+              <line x1="10" y1="17" x2="10" y2="18.5" stroke-linecap="round"/>
+              <line x1="3" y1="10" x2="1.5" y2="10" stroke-linecap="round"/>
+              <line x1="17" y1="10" x2="18.5" y2="10" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-name">Coordenadas</span>
+            <div class="stat-val-row">
+              <span class="stat-number coords" id="stat-coords">--, --</span>
+            </div>
+            <span class="stat-badge green-badge-sm">GPS</span>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ─── RIGHT PANEL ─── -->
+    <aside class="right-panel">
+
+      <div class="panel-card">
+        <div class="panel-card-title">ANÁLISE INTELIGENTE</div>
+
+        <div class="health-block">
+          <div class="health-label-row">
+            <span class="leaf-icon">🌿</span>
+            <span class="health-text">Saúde das plantas</span>
+          </div>
+          <div class="health-main">
+            <div class="health-pct-block">
+              <span class="health-pct" id="health-pct">0%</span>
+              <span class="health-status" id="health-status-text">Aguardando</span>
+            </div>
+            <div class="donut-wrap">
+              <svg viewBox="0 0 80 80" width="64" height="64">
+                <circle cx="40" cy="40" r="30" fill="none" stroke="#1e3a2e" stroke-width="10"/>
+                <circle cx="40" cy="40" r="30" fill="none" stroke="#4ade80" stroke-width="10"
+                  id="health-donut-fill"
+                  stroke-dasharray="0 188.5"
+                  stroke-dashoffset="0"
+                  stroke-linecap="round"
+                  transform="rotate(-90 40 40)"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="distrib-block">
+          <div class="panel-card-title" style="font-size:10px; margin-bottom:10px;">Distribuição da área</div>
+          <div class="distrib-row">
+            <span class="distrib-dot green-dot"></span>
+            <span class="distrib-label">Saudável</span>
+            <div class="distrib-bar-wrap">
+              <div class="distrib-bar green-bar" id="distrib-healthy-bar" style="width:0%"></div>
+            </div>
+            <span class="distrib-pct" id="distrib-healthy-pct">0%</span>
+          </div>
+          <div class="distrib-row">
+            <span class="distrib-dot yellow-dot"></span>
+            <span class="distrib-label">Em risco</span>
+            <div class="distrib-bar-wrap">
+              <div class="distrib-bar yellow-bar" id="distrib-risky-bar" style="width:0%"></div>
+            </div>
+            <span class="distrib-pct" id="distrib-risky-pct">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-card-title">ALERTAS ATIVOS</div>
+        <div id="alerts-container">
+          <div class="empty-state" id="alerts-empty">Nenhum alerta no momento. Inicie o mapeamento para monitorar pragas.</div>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-card-title">AÇÕES SUGERIDAS</div>
+        <div id="actions-container">
+          <div class="empty-state" id="actions-empty">Nenhuma ação sugerida no momento.</div>
+        </div>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- ══════════════════ MODAL: HISTÓRICO DE PRAGAS (BANCO DE DADOS) ══════════════════ -->
+  <div class="modal-overlay hidden" id="history-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span class="modal-title">Histórico de Pragas Registradas</span>
+        <button class="modal-close" id="history-modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <table class="history-table hidden" id="history-table">
+          <thead>
+            <tr>
+              <th>Data/Hora</th>
+              <th>Zona</th>
+              <th>Praga</th>
+              <th>Severidade</th>
+            </tr>
+          </thead>
+          <tbody id="history-table-body"></tbody>
+        </table>
+        <div class="empty-state" id="history-empty">Nenhum registro no histórico ainda.</div>
+      </div>
+      <div class="modal-footer">
+        <span class="history-count" id="history-count">0 registros</span>
+        <div class="modal-footer-actions">
+          <button class="btn-mission btn-tool" id="history-clear-btn">Limpar Histórico</button>
+          <button class="btn-mission btn-start" id="history-close-btn">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ MODAL: GERADOR DE MOSAICO ══════════════════ -->
+  <div class="modal-overlay hidden" id="mosaic-modal">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <span class="modal-title">Gerador de Mosaico Aéreo</span>
+        <button class="modal-close" id="mosaic-modal-close" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="mosaic-progress-row">
+          <div class="mosaic-progress-bar-bg">
+            <div class="mosaic-progress-bar-fill" id="mosaic-progress-fill" style="width:0%"></div>
+          </div>
+          <span class="mosaic-progress-text" id="mosaic-progress-text">0%</span>
+        </div>
+        <canvas id="mosaic-canvas" width="640" height="400"></canvas>
+        <p class="mosaic-status-text" id="mosaic-status-text">Inicie o mapeamento para capturar imagens antes de gerar o mosaico.</p>
+      </div>
+      <div class="modal-footer">
+        <span class="mosaic-info" id="mosaic-info"></span>
+        <div class="modal-footer-actions">
+          <button class="btn-mission btn-tool" id="mosaic-generate-btn">Gerar Mosaico</button>
+          <button class="btn-mission btn-start hidden" id="mosaic-download-btn">Baixar Mosaico</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

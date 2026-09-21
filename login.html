@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgroVision — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="login.css">
+</head>
+<body>
+  <main class="login-page">
+    <section class="login-visual">
+      <div class="visual-overlay"></div>
+      <div class="brand">
+        <img src="logo.png" alt="Logo AgroVision"><span>AgroVision</span>
+      </div>
+      <div class="visual-content">
+        <span class="eyebrow">AGRICULTURA DE PRECISÃO</span>
+        <h1>Inteligência para<br><strong>cultivar melhor.</strong></h1>
+        <p>Monitore sua lavoura, identifique anomalias e tome decisões mais precisas através de tecnologia e dados.</p>
+      </div>
+      <div class="visual-status"><span></span> Plataforma operacional</div>
+    </section>
+
+    <section class="login-panel">
+      <div class="login-card">
+        <div class="mobile-logo">
+          <img src="logo.png" alt="Logo AgroVision"><span>AgroVision</span>
+        </div>
+        <span class="section-tag">ACESSO AO SISTEMA</span>
+        <h2>Bem-vindo de volta</h2>
+        <p class="subtitle">Entre com suas credenciais para acessar o painel AgroVision.</p>
+
+        <form id="login-form">
+          <label for="email">E-mail</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="4" width="15" height="12" rx="2"></rect><path d="m3 5 7 5 7-5"></path></svg>
+            <input id="email" type="email" placeholder="seu@email.com" autocomplete="username" required>
+          </div>
+
+          <label for="password">Senha</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="8" width="12" height="9" rx="2"></rect><path d="M6.5 8V6a3.5 3.5 0 0 1 7 0v2"></path></svg>
+            <input id="password" type="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+            <button type="button" class="show-password" id="toggle-password">Mostrar</button>
+          </div>
+
+          <div class="form-row">
+            <label class="remember"><input type="checkbox" id="remember"> <span>Manter sessão ativa</span></label>
+            <span class="security">● Sistema protegido</span>
+          </div>
+
+          <button class="login-button" type="submit">Entrar no AgroVision <span>→</span></button>
+          <p class="error-message" id="login-error"></p>
+        </form>
+
+        <div class="demo-box">
+          <strong>Acesso demonstrativo do TCC</strong>
+          <span>E-mail: <b>admin@agrovision.com</b></span>
+          <span>Senha: <b>agro123</b></span>
+        </div>
+        <p class="footer-note">AgroVision • Monitoramento inteligente de lavouras</p>
+      </div>
+    </section>
+  </main>
+  <script>
+    if (localStorage.getItem('agrovision_logged_in') === 'true' || sessionStorage.getItem('agrovision_logged_in') === 'true') {
+      window.location.replace('index.html');
+    }
+    const form = document.getElementById('login-form');
+    const error = document.getElementById('login-error');
+    document.getElementById('toggle-password').addEventListener('click', function () {
+      const input = document.getElementById('password');
+      const visible = input.type === 'text';
+      input.type = visible ? 'password' : 'text';
+      this.textContent = visible ? 'Mostrar' : 'Ocultar';
+    });
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const email = document.getElementById('email').value.trim().toLowerCase();
+      const password = document.getElementById('password').value;
+      if (email === 'admin@agrovision.com' && password === 'agro123') {
+        // Limpa uma sessão anterior e grava o acesso corretamente.
+        localStorage.removeItem('agrovision_logged_in');
+        sessionStorage.removeItem('agrovision_logged_in');
+
+        const storage = document.getElementById('remember').checked ? localStorage : sessionStorage;
+        storage.setItem('agrovision_logged_in', 'true');
+
+        // Login aprovado: abre diretamente o dashboard original.
+        window.location.href = 'permissao.html';
+      } else {
+        error.textContent = 'E-mail ou senha incorretos. Verifique as credenciais e tente novamente.';
+      }
+    });
+  </script>
+</body>
+</html>

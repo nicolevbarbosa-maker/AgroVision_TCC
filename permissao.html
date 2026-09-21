@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgroVision — Permissões</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="login.css">
+</head>
+
+<body>
+  <main class="login-page permission-page">
+    <section class="login-visual">
+      <div class="visual-overlay"></div>
+      <div class="brand"><img src="logo.png" alt="Logo AgroVision"><span>AgroVision</span></div>
+      <div class="visual-content">
+        <span class="eyebrow">AMBIENTE CONTROLADO</span>
+        <h1>Quase tudo<br><strong>pronto.</strong></h1>
+        <p>Antes de abrir o painel, confirme as permissões necessárias para o funcionamento dos recursos de
+          monitoramento.</p>
+      </div>
+      <div class="visual-status"><span></span> Conexão segura</div>
+    </section>
+
+    <section class="login-panel">
+      <div class="login-card permission-card">
+        <div class="mobile-logo"><img src="logo.png" alt="Logo AgroVision"><span>AgroVision</span></div>
+        <div class="permission-icon">
+          <svg viewBox="0 0 32 32">
+            <path d="M16 3 27 7v8c0 7-4.7 11.7-11 14C9.7 26.7 5 22 5 15V7l11-4Z"></path>
+            <path d="m11 16 3 3 7-7"></path>
+          </svg>
+        </div>
+        <span class="section-tag">PERMISSÃO DE ACESSO</span>
+        <h2>Autorizar acesso</h2>
+        <p class="subtitle">O AgroVision utiliza a câmera para exibir a visão da lavoura em tempo real. A autorização
+          abaixo também libera o acesso ao painel.</p>
+
+        <div class="permission-list">
+          <div class="permission-item">
+            <div class="permission-item-icon">◉</div>
+            <div><strong>Câmera do monitoramento</strong><span>Usada para a transmissão da câmera no painel.</span>
+            </div>
+            <span class="permission-ok">NECESSÁRIA</span>
+          </div>
+          <div class="permission-item">
+            <div class="permission-item-icon">⌖</div>
+            <div><strong>Dados da operação</strong><span>Permite visualizar informações da missão e do
+                mapeamento.</span></div>
+            <span class="permission-ok">NECESSÁRIA</span>
+          </div>
+        </div>
+
+        <div class="consent">
+          <input type="checkbox" id="consent">
+          <label for="consent">Li e autorizo o acesso aos recursos necessários para utilizar o AgroVision.</label>
+        </div>
+        <button class="login-button" id="allow-button" disabled>Autorizar e acessar sistema <span>→</span></button>
+        <button class="back-button" id="back-button">← Voltar para o login</button>
+        <p class="permission-message" id="permission-message"></p>
+        <p class="footer-note">AgroVision • Controle de acesso do sistema</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    if (localStorage.getItem('agrovision_logged_in') !== 'true' && sessionStorage.getItem('agrovision_logged_in') !== 'true') {
+      window.location.replace('login.html');
+    }
+    const consent = document.getElementById('consent');
+    const allow = document.getElementById('allow-button');
+    const message = document.getElementById('permission-message');
+
+    consent.addEventListener('change', () => {
+      allow.disabled = !consent.checked;
+    });
+
+    allow.addEventListener('click', async () => {
+      allow.disabled = true;
+      allow.innerHTML = 'Solicitando permissão...';
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          stream.getTracks().forEach(track => track.stop());
+        }
+        const storage = localStorage.getItem('agrovision_logged_in') === 'true' ? localStorage : sessionStorage;
+        storage.setItem('agrovision_permission', 'true');
+        window.location.href = 'index.html';
+      } catch (err) {
+        // A aplicação ainda pode ser apresentada em modo demonstração caso o navegador bloqueie a câmera.
+        message.textContent = 'A câmera foi bloqueada pelo navegador. Você pode liberar a câmera nas configurações do navegador e tentar novamente.';
+        allow.disabled = false;
+        allow.innerHTML = 'Autorizar e acessar sistema <span>→</span>';
+      }
+    });
+
+    document.getElementById('back-button').addEventListener('click', () => {
+      localStorage.removeItem('agrovision_logged_in');
+      localStorage.removeItem('agrovision_permission');
+      sessionStorage.removeItem('agrovision_logged_in');
+      sessionStorage.removeItem('agrovision_permission');
+      window.location.href = 'login.html';
+    });
+  </script>
+</body>
+
+</html>
