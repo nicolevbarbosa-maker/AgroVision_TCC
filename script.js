@@ -1,6 +1,16 @@
 /* ═══════════════════════════════════════════════════
-   AGROVISION — Dashboard Script (Unificado & Refatorado)
+   AGROVISION — Dashboard Script (Unificado & Estável)
    ═══════════════════════════════════════════════════ */
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 const MISSION = {
   running: false,
@@ -11,7 +21,7 @@ const MISSION = {
   distanceKm: 0,
   altitudeM: 0,
   scannedPct: 0,
-  healthPct: 100,
+  healthPct: 0,
 
   temp: 28.6,
   humidity: 65,
@@ -24,19 +34,23 @@ const MISSION = {
 
 const BASE_URL = 'http://127.0.0.1:8000';
 
-/* ─── Utilitários de Formatação ─────────────────────── */
+/* ─── Utilitários ────────────────────────────────────── */
 function fmtTime(totalSecs) {
   const m = String(Math.floor(totalSecs / 60)).padStart(2, '0');
   const s = String(totalSecs % 60).padStart(2, '0');
   return `${m}:${s}`;
 }
+
 function fmtNum(n, decimals = 1) {
   return n.toFixed(decimals).replace('.', ',');
 }
 
-/* ═══════════════════════════════════════════════════
-   1. HISTÓRICO DE PRAGAS (Integração Total MySQL)
-   ═══════════════════════════════════════════════════ */
+function clearActionsPanel() {
+  const panel = document.getElementById('actions-panel');
+  if (panel) panel.innerHTML = '';
+}
+
+/* ─── 1. HISTÓRICO NO BANCO ──────────────────────────── */
 async function clearHistoryDB() {
   try {
     await fetch(`${BASE_URL}/limpar-historico`, { method: 'DELETE' });
@@ -69,7 +83,6 @@ async function renderHistoryModal() {
     table.classList.remove('hidden');
     empty.classList.add('hidden');
 
-    // Construção segura dos nós do DOM (Proteção contra XSS)
     history.forEach(rec => {
       const tr = document.createElement('tr');
 
@@ -108,35 +121,49 @@ function closeHistoryModal() {
   document.getElementById('history-modal')?.classList.add('hidden');
 }
 
-/* ═══════════════════════════════════════════════════
-   2. SIMULAÇÃO E CONTROLE DA MISSÃO
-   ═══════════════════════════════════════════════════ */
+/* ─── 2. CONTROLE DA MISSÃO ───────────────────────────── */
 function statusLabel() {
   switch (MISSION.status) {
-    case 'em_voo':    return { text: 'Em voo',    cls: 'green' };
-    case 'pausado':   return { text: 'Pausado',   cls: 'yellow' };
+    case 'em_voo': return { text: 'Em voo', cls: 'green' };
+    case 'pausado': return { text: 'Pausado', cls: 'yellow' };
     case 'concluido': return { text: 'Concluído', cls: 'green' };
-    default:          return { text: 'Parado',    cls: 'gray' };
+    default: return { text: 'Parado', cls: 'gray' };
   }
 }
 
-async function startMapping() {
-  if (MISSION.scannedPct >= 100) return;
-  
+async function startMapping(e) {
+  if (e) e.preventDefault();
+
+  if (MISSION.scannedPct >= 100) {
+    resetMapping();
+  }
+
+  // 1. Limpa o histórico no banco para iniciar do zero
+  await clearHistoryDB();
+
+  // 2. Notifica a API sobre o início do mapeamento
   try {
     await fetch(`${BASE_URL}/mapeamento/iniciar`, { method: 'POST' });
   } catch (err) {
     console.error('Erro ao acionar início de mapeamento no backend:', err);
   }
 
+  // 3. Define o estado ativo
   MISSION.running = true;
   MISSION.everStarted = true;
   MISSION.status = 'em_voo';
+  MISSION.scannedPct = 0;
+  MISSION.healthPct = 0;
+  MISSION.elapsed = 0;
+  MISSION.distanceKm = 0;
+
+  clearActionsPanel();
   updateButtonStates();
   renderMission();
 }
 
-async function stopMapping() {
+async function stopMapping(e) {
+  if (e) e.preventDefault();
   if (!MISSION.running) return;
 
   try {
@@ -151,17 +178,29 @@ async function stopMapping() {
   renderMission();
 }
 
-function completeMapping() {
+async function completeMapping() {
+  if (!MISSION.running && MISSION.status === 'concluido') return;
+
   MISSION.running = false;
   MISSION.status = 'concluido';
+  MISSION.scannedPct = 100;
+
   updateButtonStates();
   renderMission();
+
+  // Abre o modal do ortomosaico automaticamente ao concluir
+  setTimeout(() => {
+    openMosaicModal();
+    generateMosaic();
+  }, 500);
 }
 
-async function resetMapping() {
+async function resetMapping(e) {
+  if (e) e.preventDefault();
+
   try {
     await fetch(`${BASE_URL}/mapeamento/parar`, { method: 'POST' });
-  } catch (e) {}
+  } catch (e) { }
 
   MISSION.running = false;
   MISSION.everStarted = false;
@@ -170,7 +209,7 @@ async function resetMapping() {
   MISSION.distanceKm = 0;
   MISSION.altitudeM = 0;
   MISSION.scannedPct = 0;
-  MISSION.healthPct = 100;
+  MISSION.healthPct = 0;
   MISSION.temp = 28.6;
   MISSION.humidity = 65;
   MISSION.wind = 12.4;
@@ -186,125 +225,12 @@ async function resetMapping() {
 
 function updateButtonStates() {
   const startBtn = document.getElementById('btn-start-mission');
-  const stopBtn  = document.getElementById('btn-stop-mission');
-  if (startBtn) startBtn.disabled = MISSION.running || MISSION.scannedPct >= 100;
-  if (stopBtn)  stopBtn.disabled  = !MISSION.running;
+  const stopBtn = document.getElementById('btn-stop-mission');
+  if (startBtn) startBtn.disabled = MISSION.running;
+  if (stopBtn) stopBtn.disabled = !MISSION.running;
 }
 
-function tick() {
-  MISSION.elapsed++;
-
-  const speedSlider = document.getElementById('speed-slider');
-  const speed = speedSlider ? Number(speedSlider.value) : 50;
-  const speedFactor = Math.max(speed, 5) / 50;
-
-  MISSION.distanceKm += 0.012 * speedFactor;
-  MISSION.scannedPct = Math.min(100, MISSION.scannedPct + 0.55 * speedFactor);
-
-  const targetAlt = 125;
-  MISSION.altitudeM += (targetAlt - MISSION.altitudeM) * 0.12 + (Math.random() - 0.5) * 1.4;
-  if (MISSION.altitudeM < 0) MISSION.altitudeM = 0;
-
-  MISSION.temp += (Math.random() - 0.5) * 0.15;
-  MISSION.humidity = Math.min(100, Math.max(0, MISSION.humidity + (Math.random() - 0.5) * 0.4));
-  MISSION.wind = Math.max(0, MISSION.wind + (Math.random() - 0.5) * 0.3);
-  MISSION.lat += (Math.random() - 0.5) * 0.0004;
-  MISSION.lng += (Math.random() - 0.5) * 0.0004;
-
-  renderMission();
-
-  if (MISSION.scannedPct >= 100) {
-    completeMapping();
-  }
-}
-
-/* ─── Renderização de Alertas Reais do MySQL ────────── */
-async function carregarAlertasDoBanco() {
-  const container = document.getElementById('alerts-container');
-  const actionsContainer = document.getElementById('actions-container');
-  if (!container) return;
-
-  try {
-    const res = await fetch(`${BASE_URL}/alertas-recentes`);
-    if (!res.ok) return;
-
-    const alertas = await res.json();
-
-    if (alertas.length === 0) {
-      container.innerHTML = '<div class="empty-state" id="alerts-empty">Nenhum alerta no momento. Inicie o mapeamento para monitorar.</div>';
-      if (actionsContainer) actionsContainer.innerHTML = '<div class="empty-state">Nenhuma ação sugerida no momento.</div>';
-      return;
-    }
-
-    container.innerHTML = alertas.map(rec => {
-      const isHigh = rec.status === 'CRÍTICO';
-      const zona = rec.setor || 'Zona A';
-      return `
-        <div class="alert-card ${isHigh ? 'alert-red' : 'alert-yellow'}">
-          <div class="alert-icon-wrap ${isHigh ? 'red-icon-wrap' : 'yellow-icon-wrap'}">
-            <svg viewBox="0 0 20 20" width="16" height="16" fill="none">
-              <path d="M10 3L2 17h16L10 3z" stroke="${isHigh ? '#ef4444' : '#f59e0b'}" stroke-width="1.5" stroke-linejoin="round"/>
-              <line x1="10" y1="9" x2="10" y2="13" stroke="${isHigh ? '#ef4444' : '#f59e0b'}" stroke-width="1.5" stroke-linecap="round"/>
-              <circle cx="10" cy="15.5" r="0.8" fill="${isHigh ? '#ef4444' : '#f59e0b'}"/>
-            </svg>
-          </div>
-          <div class="alert-body">
-            <div class="alert-title-row">
-              <span class="alert-title ${isHigh ? 'red-text' : 'yellow-text'}">${rec.praga_nome} detectado(a)</span>
-              <span class="zone-badge ${isHigh ? 'red-zone' : 'yellow-zone'}">${zona}</span>
-            </div>
-            <div class="alert-desc">Severidade: ${rec.status} — Confiança: ${(rec.confianca * 100).toFixed(0)}%</div>
-            <div class="alert-time">${rec.data_hora ? new Date(rec.data_hora).toLocaleTimeString('pt-BR') : 'Detectado agora'}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    if (actionsContainer && alertas.length > 0) {
-      actionsContainer.innerHTML = alertas.slice(0, 3).map(rec => `
-        <div class="action-item">
-          <div class="action-check">
-            <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="#4ade80" stroke-width="1.8">
-              <polyline points="2,6 5,9 10,3" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <span class="action-text">Aplicar manejo para ${rec.praga_nome} em ${rec.setor || 'Zona A'}</span>
-        </div>
-      `).join('');
-    }
-  } catch (err) {
-    console.error('[AgroVision] Erro ao buscar alertas do MySQL:', err);
-  }
-}
-
-function clearActionsPanel() {
-  const container = document.getElementById('actions-container');
-  if (container) container.innerHTML = '<div class="empty-state" id="actions-empty">Nenhuma ação sugerida no momento.</div>';
-}
-
-/* ─── Sensores Ambientais & Donuts ──────────────────── */
-function tempBadge() {
-  if (!MISSION.everStarted) return { text: '—', cls: 'gray-badge' };
-  return (MISSION.temp >= 18 && MISSION.temp <= 32) ? { text: 'Ideal', cls: 'green-badge' } : { text: 'Atenção', cls: 'gray-badge' };
-}
-function humidityBadge() {
-  if (!MISSION.everStarted) return { text: '—', cls: 'gray-badge' };
-  return (MISSION.humidity >= 45 && MISSION.humidity <= 80) ? { text: 'Ideal', cls: 'green-badge' } : { text: 'Atenção', cls: 'gray-badge' };
-}
-function windBadge() {
-  if (!MISSION.everStarted) return { text: '—', cls: 'gray-badge' };
-  return MISSION.wind <= 20 ? { text: 'Moderado', cls: 'gray-badge' } : { text: 'Forte', cls: 'gray-badge' };
-}
-function setStat(valueId, valueText, badgeId, badgeInfo) {
-  const valEl = document.getElementById(valueId);
-  if (valEl) valEl.textContent = valueText;
-  const badgeEl = document.getElementById(badgeId);
-  if (badgeEl && badgeInfo) {
-    badgeEl.textContent = badgeInfo.text;
-    badgeEl.className = `stat-badge ${badgeInfo.cls}`;
-  }
-}
-
+/* ─── 3. RENDERIZAÇÃO VISUAL DO DASHBOARD ─────────────── */
 function updateHealthDonut(pct, color) {
   const circle = document.getElementById('health-donut-fill');
   if (!circle) return;
@@ -318,11 +244,18 @@ function renderMission() {
   const flightTimeEl = document.getElementById('flight-time');
   if (flightTimeEl) flightTimeEl.textContent = fmtTime(MISSION.elapsed);
 
+  // Atualiza os Pontos Concluídos (calculados a partir da Área Escaneada - Grade 4x3 = 12 Pontos)
   const distEl = document.getElementById('distance-value');
-  if (distEl) distEl.textContent = `${fmtNum(MISSION.distanceKm, 1)} km`;
+  if (distEl) {
+    const totalPontos = Math.min(12, Math.round((MISSION.scannedPct / 100) * 12));
+    distEl.textContent = `${totalPontos} / 12`;
+  }
 
+  // Atualiza o Quadrante Atual se o mapeamento estiver parado
   const altEl = document.getElementById('altitude-value');
-  if (altEl) altEl.textContent = `${fmtNum(MISSION.altitudeM, 1)} m`;
+  if (altEl && !MISSION.running) {
+    altEl.textContent = `X: --, Y: --`;
+  }
 
   const statusEl = document.getElementById('flight-status-value');
   if (statusEl) {
@@ -337,58 +270,21 @@ function renderMission() {
   if (scannedValEl) scannedValEl.textContent = `${scannedRounded}%`;
   if (scannedBarEl) scannedBarEl.style.width = `${scannedRounded}%`;
 
-  const healthRounded = Math.round(MISSION.healthPct);
-  const healthPctEl = document.getElementById('health-pct');
-  const healthStatusEl = document.getElementById('health-status-text');
+  const pctDaninhas = Math.round(MISSION.healthPct);
+  const pctFrutiferas = MISSION.everStarted ? Math.max(0, 100 - pctDaninhas) : 0;
 
-  let statusText = 'Aguardando';
-  let statusColor = '#4ade80';
-
-  if (MISSION.everStarted) {
-    if (healthRounded >= 80) {
-      statusText = 'Saudável';
-      statusColor = '#4ade80';
-    } else if (healthRounded >= 60) {
-      statusText = 'Atenção';
-      statusColor = '#f59e0b';
-    } else {
-      statusText = 'Crítico';
-      statusColor = '#ef4444';
-    }
-  }
-
-  if (healthPctEl) {
-    healthPctEl.textContent = MISSION.everStarted ? `${healthRounded}%` : '0%';
-    healthPctEl.style.color = MISSION.everStarted ? statusColor : '#4ade80';
-  }
-
-  if (healthStatusEl) {
-    healthStatusEl.textContent = statusText;
-    healthStatusEl.style.color = MISSION.everStarted ? statusColor : '#94a3b8';
-  }
-
-  updateHealthDonut(MISSION.everStarted ? MISSION.healthPct : 0, MISSION.everStarted ? statusColor : '#4ade80');
-
-  const healthyVal = MISSION.everStarted ? healthRounded : 0;
-  const riskyVal   = MISSION.everStarted ? 100 - healthRounded : 0;
   const healthyBar = document.getElementById('distrib-healthy-bar');
   const healthyPctEl = document.getElementById('distrib-healthy-pct');
   const riskyBar = document.getElementById('distrib-risky-bar');
   const riskyPctEl = document.getElementById('distrib-risky-pct');
-  if (healthyBar) healthyBar.style.width = `${healthyVal}%`;
-  if (healthyPctEl) healthyPctEl.textContent = `${healthyVal}%`;
-  if (riskyBar) riskyBar.style.width = `${riskyVal}%`;
-  if (riskyPctEl) riskyPctEl.textContent = `${riskyVal}%`;
 
-  setStat('stat-temp', MISSION.everStarted ? `${fmtNum(MISSION.temp, 1)} °C` : '--', 'stat-temp-badge', tempBadge());
-  setStat('stat-humidity', MISSION.everStarted ? `${Math.round(MISSION.humidity)}%` : '--', 'stat-humidity-badge', humidityBadge());
-  setStat('stat-wind', MISSION.everStarted ? `${fmtNum(MISSION.wind, 1)} km/h` : '--', 'stat-wind-badge', windBadge());
-
-  const coordsEl = document.getElementById('stat-coords');
-  if (coordsEl) coordsEl.textContent = MISSION.everStarted ? `${MISSION.lat.toFixed(4)}, ${MISSION.lng.toFixed(4)}` : '--, --';
+  if (healthyBar) healthyBar.style.width = `${pctFrutiferas}%`;
+  if (healthyPctEl) healthyPctEl.textContent = `${pctFrutiferas}%`;
+  if (riskyBar) riskyBar.style.width = `${pctDaninhas}%`;
+  if (riskyPctEl) riskyPctEl.textContent = `${pctDaninhas}%`;
 
   const liveBadge = document.getElementById('live-badge');
-  const liveText  = document.getElementById('live-badge-text');
+  const liveText = document.getElementById('live-badge-text');
   if (liveBadge && liveText) {
     if (MISSION.running) {
       liveBadge.classList.remove('offline');
@@ -407,14 +303,10 @@ function updateFreshnessText() {
     el.textContent = 'Aguardando início do mapeamento';
     return;
   }
-  el.textContent = MISSION.updateSecs === 1
-    ? 'Dados atualizados há 1 segundo'
-    : `Dados atualizados há ${MISSION.updateSecs} segundos`;
+  el.textContent = `Dados atualizados há ${MISSION.updateSecs} segundos`;
 }
 
-/* ═══════════════════════════════════════════════════
-   3. GERADOR DE MOSAICO (OpenCV Direct Rendering)
-   ═══════════════════════════════════════════════════ */
+/* ─── 4. MOSAICO ─────────────────────────────────────── */
 function openMosaicModal() {
   document.getElementById('mosaic-modal')?.classList.remove('hidden');
 }
@@ -423,13 +315,17 @@ function closeMosaicModal() {
 }
 
 async function generateMosaic(e) {
-  if (e) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
+  if (e) e.preventDefault();
 
   const statusText = document.getElementById('mosaic-status-text');
-  if (statusText) statusText.textContent = "Processando tiles no backend via OpenCV...";
+  const progressFill = document.getElementById('mosaic-progress-fill');
+  const progressText = document.getElementById('mosaic-progress-text');
+
+  if (statusText) statusText.textContent = "Processando ortomosaico via OpenCV...";
+  
+  // Coloca a barra em 30% enquanto busca a imagem no backend
+  if (progressFill) progressFill.style.width = '30%';
+  if (progressText) progressText.textContent = '30%';
 
   try {
     const timestamp = Date.now();
@@ -444,16 +340,25 @@ async function generateMosaic(e) {
 
       img.onload = () => {
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        if (statusText) statusText.textContent = "Ortomosaico gerado e renderizado com sucesso!";
+        if (statusText) statusText.textContent = "Ortomosaico gerado com sucesso!";
+        
+        if (progressFill) progressFill.style.width = '100%';
+        if (progressText) progressText.textContent = '100%';
+
         document.getElementById('mosaic-download-btn')?.classList.remove('hidden');
       };
+
       img.onerror = () => {
         if (statusText) statusText.textContent = "Erro ao carregar imagem do mosaico.";
+        if (progressFill) progressFill.style.width = '0%';
+        if (progressText) progressText.textContent = '0%';
       };
     }
   } catch (err) {
     console.error("Erro ao gerar mosaico:", err);
     if (statusText) statusText.textContent = "Falha ao conectar com o backend.";
+    if (progressFill) progressFill.style.width = '0%';
+    if (progressText) progressText.textContent = '0%';
   }
 }
 
@@ -466,97 +371,128 @@ function downloadMosaic() {
   link.click();
 }
 
-/* ═══════════════════════════════════════════════════
-   4. WEBCAM LIVE FEED
-   ═══════════════════════════════════════════════════ */
-(function initWebcam() {
-  const videoEl       = document.getElementById('camera-feed');
-  const placeholderEl = document.getElementById('video-bg');
+/* ─── 5. CONTROLADOR DE SINCRONIZAÇÃO EM TEMPO REAL ───────────── */
+async function sincronizarDashboard() {
+  try {
+    const resAnalise = await fetch(`${BASE_URL}/ultima-analise`);
+    if (resAnalise.ok) {
+      const dadosIA = await resAnalise.json();
+      if (dadosIA && dadosIA.praga_nome) {
+        const nomeEl = document.getElementById('ai-detected-name');
+        const pctEl = document.getElementById('health-pct');
+        const statusEl = document.getElementById('health-status-text');
 
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !videoEl) return;
+        const confianca = Math.round((dadosIA.confianca || 0) * 100);
+        const isCritico = dadosIA.status === 'CRÍTICO';
 
-  const constraints = {
-    video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
-    audio: false
-  };
+        if (nomeEl) nomeEl.textContent = dadosIA.praga_nome;
 
-  navigator.mediaDevices.getUserMedia(constraints)
-    .then(stream => {
-      videoEl.srcObject = stream;
-      videoEl.addEventListener('canplay', function onCanPlay() {
-        videoEl.classList.add('active');
-        if (placeholderEl) placeholderEl.style.display = 'none';
-        videoEl.removeEventListener('canplay', onCanPlay);
-      });
-    })
-    .catch(err => {
-      console.warn('[AgroVision] Câmera indisponível ou permissão negada:', err.message);
-    });
-})();
+        if (pctEl) {
+          pctEl.textContent = `${confianca}%`;
+          pctEl.style.color = isCritico ? '#f59e0b' : '#4ade80';
+        }
 
-/* ═══════════════════════════════════════════════════
-   5. VERIFICAÇÃO DINÂMICA DA API (/health)
-   ═══════════════════════════════════════════════════ */
-async function checarConexaoBackend() {
-  const statusConnected = document.querySelector('.status-connected');
-  if (!statusConnected) return;
+        if (statusEl) {
+          statusEl.textContent = isCritico ? 'Alerta Detectado' : 'Reconhecimento Ativo';
+          statusEl.style.color = isCritico ? '#f59e0b' : '#4ade80';
+        }
+
+        updateHealthDonut(confianca, isCritico ? '#f59e0b' : '#4ade80');
+
+        if (dadosIA && dadosIA.posicao_x !== undefined && dadosIA.posicao_y !== undefined && MISSION.running) {
+          const altEl = document.getElementById('altitude-value');
+          if (altEl) altEl.textContent = `X: ${dadosIA.posicao_x}, Y: ${dadosIA.posicao_y}`;
+        }
+      }
+      if (dadosIA && dadosIA.fps !== undefined) {
+        const fpsEl = document.getElementById('camera-fps-text');
+        if (fpsEl) fpsEl.textContent = `FPS: ${dadosIA.fps}`;
+      }
+    }
+  } catch (e) {
+    console.error("Erro ao buscar IA live:", e);
+  }
+
+  if (!MISSION.running) return;
+
+  if (MISSION.running && Date.now() - (window.lastTick || 0) >= 1000) {
+    MISSION.elapsed += 1;
+    window.lastTick = Date.now();
+  }
+  MISSION.distanceKm += 0.01;
+  MISSION.updateSecs = (MISSION.updateSecs + 1) % 30;
+  updateFreshnessText();
 
   try {
-    const res = await fetch(`${BASE_URL}/health`, { signal: AbortSignal.timeout(2500) });
-    if (res.ok) {
-      statusConnected.innerHTML = '<span class="dot-green"></span><span>API ONLINE</span>';
-    } else {
-      throw new Error('Servidor instável');
+    const resStatus = await fetch(`${BASE_URL}/mapeamento/status`);
+    if (resStatus.ok) {
+      const statusData = await resStatus.json();
+      if (!statusData.ativo) {
+        completeMapping();
+        return;
+      }
     }
-  } catch (err) {
-    statusConnected.innerHTML = '<span class="dot-green" style="background:#ef4444; box-shadow:0 0 6px #ef4444;"></span><span style="color:#ef4444;">API OFFLINE</span>';
+
+    const resProp = await fetch(`${BASE_URL}/proporcao-vegetacao`);
+    if (resProp.ok) {
+      const propData = await resProp.json();
+      MISSION.healthPct = propData.pct_daninhas || 0;
+      const totalPontos = propData.total || 0;
+      MISSION.scannedPct = Math.min(100, Math.round((totalPontos / 12) * 100));
+    }
+
+    const resAlertas = await fetch(`${BASE_URL}/alertas-recentes`);
+    if (resAlertas.ok) {
+      const alertas = await resAlertas.json();
+      const container = document.getElementById('alerts-container');
+      const actionsContainer = document.getElementById('actions-container');
+
+      if (container && alertas.length > 0) {
+        let temDaninha = false;
+        container.innerHTML = alertas.map(rec => {
+          const nomePraga = rec.praga_nome || '';
+          const isDaninha = rec.status === 'CRÍTICO' || rec.status === 'ALERTA' || nomePraga.includes('Daninha');
+          if (isDaninha) temDaninha = true;
+
+          const zona = escapeHtml(rec.setor || 'Ponto');
+          const praga = escapeHtml(nomePraga);
+          const cardClass = isDaninha ? 'alert-yellow' : 'alert-green';
+          const badgeClass = isDaninha ? 'yellow-zone' : 'green-zone';
+
+          return `
+            <div class="alert-card ${cardClass}">
+              <div class="alert-body">
+                <div class="alert-title-row">
+                  <span class="alert-title">${praga}</span>
+                  <span class="zone-badge ${badgeClass}">${zona}</span>
+                </div>
+                <div class="alert-desc">Status: ${escapeHtml(rec.status)}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        if (actionsContainer) {
+          actionsContainer.innerHTML = temDaninha
+            ? `<div class="action-card warning-action" style="padding:10px; background:rgba(245,158,11,0.1); border-left:3px solid #f59e0b; border-radius:4px;">
+                <div style="font-weight:bold; color:#f59e0b; font-size:12px;">⚠️ Ação Recomendada</div>
+                <div style="font-size:11px; color:#cbd5e1; margin-top:4px;">Presença de Erva Daninha detectada. Agendar aplicação localizada.</div>
+               </div>`
+            : '<div class="empty-state">Área sob controle. Nenhuma intervenção necessária.</div>';
+        }
+      }
+    }
+
+    renderMission();
+  } catch (e) {
+    console.error("Erro ao sincronizar missão:", e);
   }
 }
 
-/* ═══════════════════════════════════════════════════
-   6. ATUALIZAÇÃO DO DASHBOARD E EVENTOS
-   ═══════════════════════════════════════════════════ */
-async function atualizarDashboard() {
-  if (MISSION.running) tick();
-  if (MISSION.everStarted) {
-    MISSION.updateSecs++;
-    if (MISSION.updateSecs > 30) MISSION.updateSecs = 0;
-    updateFreshnessText();
-  }
+// Atualiza o painel de IA a cada 300ms (frequência de vídeo ao vivo)
+setInterval(sincronizarDashboard, 300);
 
-  try {
-    const resposta = await fetch(`${BASE_URL}/ultima-analise`);
-    if (!resposta.ok) return;
-
-    const dados = await resposta.json();
-    if (!dados || Object.keys(dados).length === 0) return;
-
-    const coordsEl = document.getElementById('stat-coords');
-    if (coordsEl && dados.posicao_x !== undefined) {
-      coordsEl.textContent = `X: ${dados.posicao_x}, Y: ${dados.posicao_y}`;
-    }
-
-    const statusEl = document.getElementById('flight-status-value');
-    if (statusEl && dados.fase) {
-      statusEl.textContent = dados.fase;
-      statusEl.className = 'flight-val green';
-    }
-  } catch (erro) {
-    console.error("[AgroVision] Erro ao integrar com FastAPI:", erro);
-  }
-}
-
-// Sliders e Controles da missão
-const slider = document.getElementById('speed-slider');
-if (slider) {
-  slider.addEventListener('input', () => {
-    const v = slider.value;
-    const display = document.getElementById('speed-display');
-    if (display) display.textContent = v + '%';
-    slider.style.background = `linear-gradient(90deg, #4ade80 0%, #4ade80 ${v}%, rgba(74,222,128,0.15) ${v}%, rgba(74,222,128,0.15) 100%)`;
-  });
-}
-
+/* ─── VINCULAÇÃO DE EVENTOS NOS BOTÕES ─────────────────── */
 document.getElementById('btn-start-mission')?.addEventListener('click', startMapping);
 document.getElementById('btn-stop-mission')?.addEventListener('click', stopMapping);
 document.getElementById('btn-reset-mission')?.addEventListener('click', resetMapping);
@@ -568,7 +504,6 @@ document.getElementById('history-clear-btn')?.addEventListener('click', async ()
   if (confirm('Tem certeza que deseja apagar todo o histórico de pragas no MySQL?')) {
     await clearHistoryDB();
     renderHistoryModal();
-    carregarAlertasDoBanco();
   }
 });
 
@@ -583,14 +518,114 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
   });
 });
 
-// Loops de execução
-setInterval(atualizarDashboard, 2000);
-setInterval(carregarAlertasDoBanco, 2000);
-setInterval(checarConexaoBackend, 5000);
+// Injeta o stream da câmara assim que a página carrega no navegador
+window.addEventListener('load', () => {
+  const camFeed = document.getElementById('camera-feed');
+  if (camFeed) {
+    camFeed.src = `${BASE_URL}/video_feed`;
+    camFeed.classList.add('active');
+  }
+});
 
-// Execuções iniciais
+// Inicialização da interface
 updateButtonStates();
 renderMission();
 updateFreshnessText();
-checarConexaoBackend();
-carregarAlertasDoBanco();
+
+/* ─── 6. RECURSOS SISTÊMICOS (FPS, MYSQL E CLIMA REAL) ───────── */
+
+// 1. Cálculo do FPS Real da Câmera
+let frameCount = 0;
+let lastFpsTime = performance.now();
+
+function medirFpsCamera() {
+  const now = performance.now();
+  frameCount++;
+
+  if (now - lastFpsTime >= 1000) {
+    const realFPS = Math.round((frameCount * 1000) / (now - lastFpsTime));
+    frameCount = 0;
+    lastFpsTime = now;
+
+    const fpsEl = document.getElementById('camera-fps-text');
+    if (fpsEl) fpsEl.textContent = `FPS: ${realFPS}`;
+  }
+}
+
+// 2. Verificação de Conexão com o MySQL
+async function verificarStatusBanco() {
+  const dbDot = document.getElementById('db-status-dot');
+  const dbText = document.getElementById('db-status-text');
+  try {
+    const res = await fetch(`${BASE_URL}/health`);
+    if (res.ok) {
+      if (dbText) dbText.textContent = "MySQL: Conectado";
+      if (dbDot) dbDot.style.backgroundColor = "#4ade80";
+    } else {
+      throw new Error();
+    }
+  } catch {
+    if (dbText) dbText.textContent = "MySQL: Indisponível";
+    if (dbDot) dbDot.style.backgroundColor = "#ef4444";
+  }
+}
+
+// 3. Clima Real (São Carlos / Geolocalização) via Open-Meteo API
+let userLat = -22.0174;
+let userLon = -47.8915;
+let nomeCidade = "São Carlos - SP";
+
+async function buscarClimaReal() {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${userLat}&longitude=${userLon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m`;
+    const response = await fetch(url);
+    if (!response.ok) return;
+
+    const data = await response.json();
+    const current = data.current;
+
+    const tempEl = document.getElementById('stat-temp');
+    const umidEl = document.getElementById('stat-humidity');
+    const ventoEl = document.getElementById('stat-wind');
+    const coordsEl = document.getElementById('stat-coords');
+
+    if (tempEl) tempEl.textContent = `${Math.round(current.temperature_2m)} °C`;
+    if (umidEl) umidEl.textContent = `${current.relative_humidity_2m}%`;
+    if (ventoEl) ventoEl.textContent = `${Math.round(current.wind_speed_10m)} km/h`;
+    if (coordsEl) coordsEl.textContent = nomeCidade;
+  } catch (e) {
+    console.error("Erro ao buscar clima:", e);
+  }
+}
+
+function obterLocalizacaoEClima() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        userLat = pos.coords.latitude;
+        userLon = pos.coords.longitude;
+        nomeCidade = "Local Atual";
+        buscarClimaReal();
+      },
+      () => {
+        buscarClimaReal();
+      }
+    );
+  } else {
+    buscarClimaReal();
+  }
+}
+
+// Inicializações dos novos recursos ao carregar
+window.addEventListener('load', () => {
+  const camFeed = document.getElementById('camera-feed');
+  if (camFeed) {
+    camFeed.addEventListener('load', medirFpsCamera);
+  }
+
+  verificarStatusBanco();
+  obterLocalizacaoEClima();
+
+  setInterval(verificarStatusBanco, 5000);
+  setInterval(buscarClimaReal, 600000);
+});
