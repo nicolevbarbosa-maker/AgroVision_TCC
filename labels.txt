@@ -1,0 +1,4 @@
+0 Arvore
+1 Erva daninha 1
+2 Erva daninha 2
+3 Solo
