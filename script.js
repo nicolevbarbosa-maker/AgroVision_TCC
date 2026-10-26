@@ -373,120 +373,67 @@ function downloadMosaic() {
 
 /* ─── 5. CONTROLADOR DE SINCRONIZAÇÃO EM TEMPO REAL ───────────── */
 async function sincronizarDashboard() {
-  try {
-    const resAnalise = await fetch(`${BASE_URL}/ultima-analise`);
-    if (resAnalise.ok) {
-      const dadosIA = await resAnalise.json();
-      if (dadosIA && dadosIA.praga_nome) {
-        const nomeEl = document.getElementById('ai-detected-name');
-        const pctEl = document.getElementById('health-pct');
-        const statusEl = document.getElementById('health-status-text');
+  // Dentro de sincronizarDashboard() no script.js:
+try {
+  const resAnalise = await fetch(`${BASE_URL}/ultima-analise`);
+  if (resAnalise.ok) {
+    const dadosIA = await resAnalise.json();
+    if (dadosIA && dadosIA.praga_nome) {
+      const nomeEl = document.getElementById('ai-detected-name');
+      const pctEl = document.getElementById('health-pct');
+      const statusEl = document.getElementById('health-status-text');
+      const iconEl = document.getElementById('ai-detected-icon');
 
-        const confianca = Math.round((dadosIA.confianca || 0) * 100);
-        const isCritico = dadosIA.status === 'CRÍTICO';
+      const confianca = Math.round((dadosIA.confianca || 0) * 100);
+      const praga = dadosIA.praga_nome;
 
-        if (nomeEl) nomeEl.textContent = dadosIA.praga_nome;
+      if (nomeEl) nomeEl.textContent = praga;
+      if (pctEl) pctEl.textContent = `${confianca}%`;
 
-        if (pctEl) {
-          pctEl.textContent = `${confianca}%`;
-          pctEl.style.color = isCritico ? '#f59e0b' : '#4ade80';
-        }
+      // Define ícone, cor e status ao vivo conforme a classe
+      let cor = '#4ade80';        // verde padrão
+      let icone = '🌱';
+      let statusTexto = 'Reconhecimento Ativo';
 
-        if (statusEl) {
-          statusEl.textContent = isCritico ? 'Alerta Detectado' : 'Reconhecimento Ativo';
-          statusEl.style.color = isCritico ? '#f59e0b' : '#4ade80';
-        }
+      const nomeLower = praga.toLowerCase();
 
-        updateHealthDonut(confianca, isCritico ? '#f59e0b' : '#4ade80');
-
-        if (dadosIA && dadosIA.posicao_x !== undefined && dadosIA.posicao_y !== undefined && MISSION.running) {
-          const altEl = document.getElementById('altitude-value');
-          if (altEl) altEl.textContent = `X: ${dadosIA.posicao_x}, Y: ${dadosIA.posicao_y}`;
-        }
+      if (nomeLower.includes('daninha') || dadosIA.status === 'CRÍTICO') {
+        cor = '#f59e0b';          // amarelo/laranja alerta
+        icone = '⚠️';
+        statusTexto = 'Praga Detectada';
+      } else if (nomeLower.includes('árvore') || nomeLower.includes('arvore') || nomeLower.includes('saudável')) {
+        cor = '#4ade80';          // verde
+        icone = '🌳';
+        statusTexto = 'Vegetação / Árvore';
+      } else if (nomeLower.includes('solo')) {
+        cor = '#94a3b8';          // cinza
+        icone = '🟤';
+        statusTexto = 'Solo Limpo';
       }
-      if (dadosIA && dadosIA.fps !== undefined) {
-        const fpsEl = document.getElementById('camera-fps-text');
-        if (fpsEl) fpsEl.textContent = `FPS: ${dadosIA.fps}`;
+
+      if (pctEl) pctEl.style.color = cor;
+      if (statusEl) {
+        statusEl.textContent = statusTexto;
+        statusEl.style.color = cor;
+      }
+      if (iconEl) iconEl.textContent = icone;
+
+      // Atualiza o gráfico de rosca com a porcentagem e a cor ao vivo
+      updateHealthDonut(confianca, cor);
+
+      if (dadosIA.posicao_x !== undefined && dadosIA.posicao_y !== undefined && MISSION.running) {
+        const altEl = document.getElementById('altitude-value');
+        if (altEl) altEl.textContent = `X: ${dadosIA.posicao_x}, Y: ${dadosIA.posicao_y}`;
       }
     }
-  } catch (e) {
-    console.error("Erro ao buscar IA live:", e);
+    if (dadosIA && dadosIA.fps !== undefined) {
+      const fpsEl = document.getElementById('camera-fps-text');
+      if (fpsEl) fpsEl.textContent = `FPS: ${dadosIA.fps}`;
+    }
   }
-
-  if (!MISSION.running) return;
-
-  if (MISSION.running && Date.now() - (window.lastTick || 0) >= 1000) {
-    MISSION.elapsed += 1;
-    window.lastTick = Date.now();
-  }
-  MISSION.distanceKm += 0.01;
-  MISSION.updateSecs = (MISSION.updateSecs + 1) % 30;
-  updateFreshnessText();
-
-  try {
-    const resStatus = await fetch(`${BASE_URL}/mapeamento/status`);
-    if (resStatus.ok) {
-      const statusData = await resStatus.json();
-      if (!statusData.ativo) {
-        completeMapping();
-        return;
-      }
-    }
-
-    const resProp = await fetch(`${BASE_URL}/proporcao-vegetacao`);
-    if (resProp.ok) {
-      const propData = await resProp.json();
-      MISSION.healthPct = propData.pct_daninhas || 0;
-      const totalPontos = propData.total || 0;
-      MISSION.scannedPct = Math.min(100, Math.round((totalPontos / 12) * 100));
-    }
-
-    const resAlertas = await fetch(`${BASE_URL}/alertas-recentes`);
-    if (resAlertas.ok) {
-      const alertas = await resAlertas.json();
-      const container = document.getElementById('alerts-container');
-      const actionsContainer = document.getElementById('actions-container');
-
-      if (container && alertas.length > 0) {
-        let temDaninha = false;
-        container.innerHTML = alertas.map(rec => {
-          const nomePraga = rec.praga_nome || '';
-          const isDaninha = rec.status === 'CRÍTICO' || rec.status === 'ALERTA' || nomePraga.includes('Daninha');
-          if (isDaninha) temDaninha = true;
-
-          const zona = escapeHtml(rec.setor || 'Ponto');
-          const praga = escapeHtml(nomePraga);
-          const cardClass = isDaninha ? 'alert-yellow' : 'alert-green';
-          const badgeClass = isDaninha ? 'yellow-zone' : 'green-zone';
-
-          return `
-            <div class="alert-card ${cardClass}">
-              <div class="alert-body">
-                <div class="alert-title-row">
-                  <span class="alert-title">${praga}</span>
-                  <span class="zone-badge ${badgeClass}">${zona}</span>
-                </div>
-                <div class="alert-desc">Status: ${escapeHtml(rec.status)}</div>
-              </div>
-            </div>
-          `;
-        }).join('');
-
-        if (actionsContainer) {
-          actionsContainer.innerHTML = temDaninha
-            ? `<div class="action-card warning-action" style="padding:10px; background:rgba(245,158,11,0.1); border-left:3px solid #f59e0b; border-radius:4px;">
-                <div style="font-weight:bold; color:#f59e0b; font-size:12px;">⚠️ Ação Recomendada</div>
-                <div style="font-size:11px; color:#cbd5e1; margin-top:4px;">Presença de Erva Daninha detectada. Agendar aplicação localizada.</div>
-               </div>`
-            : '<div class="empty-state">Área sob controle. Nenhuma intervenção necessária.</div>';
-        }
-      }
-    }
-
-    renderMission();
-  } catch (e) {
-    console.error("Erro ao sincronizar missão:", e);
-  }
+} catch (e) {
+  console.error("Erro ao buscar IA live:", e);
+}
 }
 
 // Atualiza o painel de IA a cada 300ms (frequência de vídeo ao vivo)

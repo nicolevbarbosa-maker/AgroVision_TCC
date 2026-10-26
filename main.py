@@ -146,7 +146,7 @@ def buscar_alertas_recentes():
         return []
 
 # --- PROCESSAMENTO DO ORTOMOSAICO (LAB COLOR MATCH + FEATHERING) ---
-LINHAS, COLUNAS = 4, 3
+LINHAS, COLUNAS = 3, 4
 CELULA = 400
 SOBREPOSICAO = 35
 FORCA_COR = 0.70
@@ -182,9 +182,9 @@ def montar_ortomosaico(pasta_tiles):
     janela = np.outer(janela_1d, janela_1d)[..., None]
 
     imagens, reais = {}, []
-    for y_tela in range(LINHAS):
-        for x_tela in range(COLUNAS):
-            r_num, c_num = x_tela + 1, LINHAS - y_tela
+    for y_tela in range(LINHAS):        # 0, 1, 2
+        for x_tela in range(COLUNAS):    # 0, 1, 2, 3
+            r_num, c_num = x_tela + 1, LINHAS - y_tela  # y_tela=0 gera c_num=3 (bate com o salvar-tile!)
             caminho = os.path.join(pasta_tiles, f"tile_r{r_num}_c{c_num}.jpg")
             caminho_alt = os.path.join(pasta_tiles, f"ponto_x{x_tela}_y{y_tela}.jpg")
 
